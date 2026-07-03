@@ -62,8 +62,8 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toUpperCase()) {
+  const getStatusColor = (status?: string) => {
+    switch ((status || '').toUpperCase()) {
       case 'SUBMITTED': return 'bg-blue-100 text-blue-800';
       case 'VALIDATED': return 'bg-amber-100 text-amber-800';
       case 'IN_PROGRESS': return 'bg-indigo-100 text-indigo-800';
@@ -72,17 +72,17 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status.toUpperCase()) {
+  const getStatusLabel = (status?: string) => {
+    switch ((status || '').toUpperCase()) {
       case 'SUBMITTED': return 'Signalé';
       case 'VALIDATED': return 'Validé';
       case 'IN_PROGRESS': return 'En cours';
       case 'COMPLETED': return 'Terminé';
-      default: return status;
+      default: return status || 'Inconnu';
     }
   };
 
-  const getWasteTypeLabel = (type: string) => {
+  const getWasteTypeLabel = (type?: string) => {
     const mapping: Record<string, string> = {
       PLASTIC: 'Plastique',
       ORGANIC: 'Organique',
@@ -91,7 +91,7 @@ export const Profile: React.FC = () => {
       GLASS: 'Verre',
       OTHER: 'Autre'
     };
-    return mapping[type.toUpperCase()] || type;
+    return mapping[(type || '').toUpperCase()] || type || 'Signalement';
   };
 
   return (

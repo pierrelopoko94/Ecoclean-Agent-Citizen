@@ -1,4 +1,4 @@
-import { getFirebaseToken } from '../firebase';
+import { auth, getFirebaseToken } from '../firebase';
 import { UserProfile, WasteReport, Mission } from '../types';
 
 export const API_BASE_URL = 'https://ecoclean-backend-7hn0.onrender.com/api';
@@ -22,17 +22,18 @@ export class APIError extends Error {
 }
 
 // A helper to make authenticated requests to the EcoClean backend with auto-retry for Render cold starts
-async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retries = 3, retryDelayMs = 12000): Promise<T> {
+async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retries = 3, retryDelayMs = 10000): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   const headers = new Headers(options.headers || {});
 
-  // Inject Firebase token unless explicitly skipped
+  // Inject Firebase token strictly unless explicitly skipped
   if (!options.skipAuth) {
     const token = await getFirebaseToken();
-    if (token) {
+    if (token && token !== 'undefined' && token !== 'null') {
       headers.set('Authorization', `Bearer ${token}`);
     } else {
-      console.warn(`No active session token for endpoint: ${endpoint}`);
+      console.warn(`[API] Token absent ou invalide pour endpoint: ${endpoint}`);
+      throw new APIError("Utilisateur non authentifié. Veuillez vous connecter.", 401);
     }
   }
 
@@ -60,6 +61,7 @@ async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retri
         } catch (e) {
           // Response is not JSON
         }
+
         throw new APIError(
           errorData?.message || `La requête a échoué avec le code ${response.status}`,
           response.status,
@@ -98,28 +100,44 @@ async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retri
 }
 
 export const apiService = {
-  // Get current logged-in user profiles
+  // Get current logged-in user profile with automatic 404/401 backend user sync
   async getCurrentUser(): Promise<UserProfile> {
     try {
+      console.log("[API] Executing GET /users/me ...");
       return await apiRequest<UserProfile>('/users/me');
     } catch (err: any) {
-      // If user doesn't exist on backend yet, create profile or handle
-      if (err instanceof APIError && err.status === 404) {
-        // Fallback or attempt to auto-create user on backend
-        return await this.createProfile();
+      if (err instanceof APIError && (err.status === 404 || err.status === 401)) {
+        console.warn(`[API] GET /users/me returned ${err.status}. Triggering automatic POST /users/me sync...`);
+        try {
+          await this.createProfile();
+          console.log("[API] POST /users/me succeeded. Re-fetching GET /users/me...");
+          return await apiRequest<UserProfile>('/users/me');
+        } catch (postErr) {
+          console.error("[API] Automatic profile creation failed:", postErr);
+          throw err;
+        }
       }
       throw err;
     }
   },
 
   // Create or sync user profile on the backend
-  async createProfile(): Promise<UserProfile> {
+  async createProfile(customData?: Partial<UserProfile>): Promise<UserProfile> {
+    const currentUser = auth.currentUser;
+    const payload = {
+      firebaseUid: currentUser?.uid || customData?.id || '',
+      email: currentUser?.email || customData?.email || '',
+      name: customData?.name || currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'Citoyen'),
+      role: customData?.role || 'CITIZEN'
+    };
+
+    console.log("[API] Executing POST /users/me with payload:", payload);
     return await apiRequest<UserProfile>('/users/me', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(payload),
     });
   },
 

@@ -169,6 +169,13 @@ export const AgentMap: React.FC = () => {
 
     mapRef.current = map;
 
+    // Force size recalculation to prevent gray tiles or invalid canvas dimensions
+    setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    }, 200);
+
     // Plot target waste reports on the map
     reports.forEach((report) => {
       const icon = L.divIcon({

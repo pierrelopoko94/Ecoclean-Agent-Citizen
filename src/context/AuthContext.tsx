@@ -36,19 +36,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = async (firebaseUser: User) => {
     try {
       setError(null);
-      // Attempt to get profile from EcoClean backend
-      const userProfile = await apiService.getCurrentUser();
+      // ÉTAPE 3 & 5: Ensure fresh token before calling GET /api/users/me
+      const token = await firebaseUser.getIdToken(true);
+      console.log("USER:", auth.currentUser);
+      console.log("TOKEN FIREBASE OBTENU:", token ? "OK" : "ABSENT");
+
+      let userProfile: UserProfile;
+      try {
+        userProfile = await apiService.getCurrentUser();
+      } catch (firstErr: any) {
+        // Retry logic for 401 unauthorized or 404
+        if (firstErr instanceof APIError && firstErr.status === 401) {
+          console.warn("[401 /users/me] Tentative de rafraîchissement du token Firebase...");
+          await firebaseUser.getIdToken(true);
+          userProfile = await apiService.getCurrentUser();
+        } else {
+          throw firstErr;
+        }
+      }
+
       setProfile(userProfile);
     } catch (err: any) {
       console.error('Failed to fetch backend profile:', err);
       
-      // If server could not be reached, build a fallback profile for instant UI responsiveness
-      // But keep the error so we can notify the user gently in a banner.
       const fallbackProfile: UserProfile = {
         id: firebaseUser.uid,
         email: firebaseUser.email || '',
         name: firebaseUser.displayName || 'Citoyen EcoClean',
-        role: 'CITIZEN', // Default fallback
+        role: 'CITIZEN',
         points: 0,
         badge: 'Éco-Recrue',
         agentRequestStatus: 'NONE'
@@ -59,14 +74,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user);
+    if (auth.currentUser) {
+      await fetchProfile(auth.currentUser);
     }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      console.log("USER:", currentUser);
       if (currentUser) {
         await fetchProfile(currentUser);
       } else {
@@ -83,17 +99,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       setError(null);
-      // In iframes, signInWithPopup can fail or get blocked by browsers. 
-      // We fall back or handle it nicely.
       try {
         await signInWithPopup(auth, googleProvider);
       } catch (popupError: any) {
         if (popupError.code === 'auth/popup-blocked') {
           await signInWithRedirect(auth, googleProvider);
+        } else if (popupError.code === 'auth/unauthorized-domain') {
+          console.error("[Firebase Auth] Domaine non autorisé dans la console Firebase:", window.location.hostname);
+          throw new Error(`Ce domaine (${window.location.hostname}) n'est pas autorisé pour Google Auth. Utilisez la connexion par e-mail ou ajoutez ce domaine dans la console Firebase.`);
         } else {
           throw popupError;
         }
       }
+      console.log("USER:", auth.currentUser);
     } catch (err: any) {
       setError(err.message || 'La connexion avec Google a échoué.');
       setLoading(false);
@@ -106,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setError(null);
       await signInWithEmailAndPassword(auth, email, password);
+      console.log("USER:", auth.currentUser);
     } catch (err: any) {
       setError(err.message || 'La connexion par e-mail a échoué.');
       setLoading(false);
@@ -118,10 +137,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setError(null);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // Set display name in Firebase Auth
       await updateProfile(userCredential.user, { displayName: name });
+      console.log("USER:", auth.currentUser);
       
-      // Wait a moment for Firebase auth to propagate, then sync with backend
       try {
         await apiService.createProfile();
       } catch (backendErr) {

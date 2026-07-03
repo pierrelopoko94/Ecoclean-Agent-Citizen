@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
   projectId: "inspiring-rex-ls7sz",
@@ -16,12 +16,29 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export async function getFirebaseToken(): Promise<string | null> {
+  if (auth.authStateReady) {
+    try {
+      await auth.authStateReady();
+    } catch {
+      // Ignore authStateReady error if any
+    }
+  }
+
   const currentUser = auth.currentUser;
-  if (!currentUser) return null;
+  console.log("USER:", currentUser);
+
+  if (!currentUser) {
+    console.warn("USER: null - aucun utilisateur Firebase connecté");
+    return null;
+  }
+
   try {
-    return await currentUser.getIdToken(true);
+    const token = await currentUser.getIdToken(true);
+    console.log("TOKEN FIREBASE OBTENU:", token ? "OK" : "ABSENT");
+    return token;
   } catch (error) {
     console.error('Error getting Firebase Token:', error);
     return null;
   }
 }
+

@@ -246,8 +246,8 @@ export const AgentMissions: React.FC = () => {
     }
   };
 
-  const getWasteTypeColor = (type: string) => {
-    switch (type.toUpperCase()) {
+  const getWasteTypeColor = (type?: string) => {
+    switch ((type || '').toUpperCase()) {
       case 'PLASTIC': return 'bg-sky-100 text-sky-800';
       case 'ORGANIC': return 'bg-amber-100 text-amber-800';
       case 'METAL': return 'bg-slate-100 text-slate-800';
