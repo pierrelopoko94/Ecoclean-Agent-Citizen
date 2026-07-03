@@ -154,70 +154,42 @@ export const apiService = {
     longitude: number;
     avenue?: string;
     address?: string;
+    imageUrl?: string;
     photoFile?: File;
     photoBase64?: string;
   }): Promise<WasteReport> {
+    const fallbackImage = 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&w=600&q=80';
+    let photoUrl = data.imageUrl || '';
+
+    // If photoUrl is missing or is a long base64 string, sanitize to fallback URL
+    if (!photoUrl || photoUrl.startsWith('data:')) {
+      photoUrl = fallbackImage;
+    }
+
+    const adresseComplete = data.address || (data.avenue ? `Avenue ${data.avenue}, ${data.commune}` : `Kinshasa, ${data.commune}`);
+
     const reportData = {
+      wasteType: data.type,
       type: data.type,
       description: data.description,
       commune: data.commune,
-      latitude: data.latitude,
-      longitude: data.longitude,
+      latitude: Number(data.latitude),
+      longitude: Number(data.longitude),
       avenue: data.avenue || '',
-      address: data.address || '',
-      adresseComplete: data.address || (data.avenue ? `Avenue ${data.avenue}, ${data.commune}` : data.commune),
-      photo: data.photoBase64 || '',
+      address: data.address || adresseComplete,
+      adresseComplete: adresseComplete,
+      estimatedVolume: 1.0,
+      imageUrl: photoUrl,
+      photo: photoUrl,
     };
 
-    try {
-      if (data.photoFile) {
-        // Attempt using FormData first
-        const formData = new FormData();
-        formData.append('type', data.type);
-        formData.append('description', data.description);
-        formData.append('commune', data.commune);
-        formData.append('latitude', String(data.latitude));
-        formData.append('longitude', String(data.longitude));
-        if (data.avenue) formData.append('avenue', data.avenue);
-        if (data.address) {
-          formData.append('address', data.address);
-          formData.append('adresseComplete', data.address);
-        } else {
-          formData.append('adresseComplete', reportData.adresseComplete);
-        }
-        formData.append('photo', data.photoFile);
-
-        return await apiRequest<WasteReport>('/reports', {
-          method: 'POST',
-          body: formData,
-        });
-      } else {
-        // Send as JSON
-        return await apiRequest<WasteReport>('/reports', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(reportData),
-        });
-      }
-    } catch (err) {
-      // If multipart/form-data failed, try fallback with JSON base64 if possible
-      if (data.photoFile && !data.photoBase64) {
-        const base64 = await fileToBase64(data.photoFile);
-        return await apiRequest<WasteReport>('/reports', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...reportData,
-            photo: base64,
-          }),
-        });
-      }
-      throw err;
-    }
+    return await apiRequest<WasteReport>('/reports', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(reportData),
+    });
   },
 
   // Get active missions assigned to the agent using GET /api/missions
