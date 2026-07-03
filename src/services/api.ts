@@ -130,20 +130,18 @@ export const apiService = {
     });
   },
 
-  // Get waste reports (can be filtered or retrieved via 'me' or all reports)
+  // Get waste reports (directly from GET /reports and filter by current user's ID)
   async getMyReports(): Promise<WasteReport[]> {
-    // Attempt to fetch my specific reports.
-    // If '/reports/me' doesn't exist, we fall back to /reports
     try {
-      return await apiRequest<WasteReport[]>('/reports/me');
-    } catch {
-      try {
-        const allReports = await apiRequest<WasteReport[]>('/reports');
-        return allReports;
-      } catch {
-        // Return fallback mockup for demo purposes if backend fails or has no reports
-        return [];
+      const currentUser = await this.getCurrentUser().catch(() => null);
+      const allReports = await apiRequest<WasteReport[]>('/reports');
+      if (currentUser?.id) {
+        const myReports = allReports.filter(r => r.userId === currentUser.id || (r as any).user_id === currentUser.id);
+        return myReports;
       }
+      return allReports;
+    } catch {
+      return [];
     }
   },
 

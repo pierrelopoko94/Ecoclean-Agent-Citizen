@@ -71,14 +71,16 @@ export const NewReport: React.FC = () => {
     setGpsError(null);
 
     if (!navigator.geolocation) {
-      setGpsError("La géolocalisation n'est pas supportée par votre navigateur.");
+      setGpsError("Géolocalisation indisponible — vous pouvez entrer votre position manuellement ou utiliser la position par défaut (Gombe, Kinshasa).");
+      setLatitude((prev) => (prev !== null ? prev : -4.3217));
+      setLongitude((prev) => (prev !== null ? prev : 15.3125));
       setGpsLoading(false);
       return;
     }
 
     const options = {
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 8000,
       maximumAge: 0
     };
 
@@ -90,11 +92,9 @@ export const NewReport: React.FC = () => {
       },
       (err) => {
         console.error('GPS Error:', err);
-        let msg = "Impossible de récupérer votre position GPS.";
-        if (err.code === 1) msg = "Veuillez autoriser l'accès GPS dans les paramètres.";
-        else if (err.code === 2) msg = "Signal GPS indisponible (vérifiez que votre localisation est activée).";
-        else if (err.code === 3) msg = "Délai de recherche GPS dépassé.";
-        setGpsError(msg);
+        setGpsError("Géolocalisation indisponible — vous pouvez entrer votre position manuellement ou utiliser la position par défaut (Gombe, Kinshasa).");
+        setLatitude((prev) => (prev !== null ? prev : -4.3217));
+        setLongitude((prev) => (prev !== null ? prev : 15.3125));
         setGpsLoading(false);
       },
       options
@@ -135,10 +135,8 @@ export const NewReport: React.FC = () => {
       return;
     }
 
-    if (!latitude || !longitude) {
-      setError("La géolocalisation GPS est requise pour guider l'agent de terrain.");
-      return;
-    }
+    const finalLat = latitude ?? -4.3217;
+    const finalLng = longitude ?? 15.3125;
 
     setSubmitting(true);
     try {
@@ -146,8 +144,8 @@ export const NewReport: React.FC = () => {
         type,
         description,
         commune,
-        latitude,
-        longitude,
+        latitude: finalLat,
+        longitude: finalLng,
         avenue,
         address,
         photoFile: photo || undefined,
@@ -280,8 +278,8 @@ export const NewReport: React.FC = () => {
           </div>
 
           {/* GPS Auto-Location Info Panel */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
+          <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Géolocalisation</span>
               <button
                 type="button"
@@ -298,12 +296,12 @@ export const NewReport: React.FC = () => {
               </button>
             </div>
 
-            {latitude && longitude ? (
-              <div className="flex items-center gap-3 text-emerald-800 bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-xs font-medium">
-                <MapPin className="w-5 h-5 text-emerald-600 shrink-0" />
+            {gpsError ? (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-xl text-xs font-medium leading-relaxed flex items-start gap-2">
+                <MapPinOff className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-emerald-900">Position acquise avec succès</p>
-                  <p className="text-emerald-700/80 mt-0.5">Lat : {latitude.toFixed(5)} , Long : {longitude.toFixed(5)}</p>
+                  <p className="font-bold text-amber-950">Position GPS manuelle</p>
+                  <p className="mt-0.5">Géolocalisation indisponible — vous pouvez entrer votre position manuellement ou utiliser la position par défaut (Gombe, Kinshasa).</p>
                 </div>
               </div>
             ) : gpsLoading ? (
@@ -315,14 +313,41 @@ export const NewReport: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 text-rose-800 bg-rose-50 border border-rose-100 p-3 rounded-xl text-xs font-medium">
-                <MapPinOff className="w-5 h-5 text-rose-600 shrink-0" />
+              <div className="flex items-center gap-3 text-emerald-800 bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-xs font-medium">
+                <MapPin className="w-5 h-5 text-emerald-600 shrink-0" />
                 <div>
-                  <p className="font-semibold text-rose-900">Localisation GPS manquante</p>
-                  <p className="text-rose-700/80 mt-0.5">{gpsError || "Cliquez sur 'Actualiser GPS' ci-dessus."}</p>
+                  <p className="font-semibold text-emerald-900">Position GPS disponible</p>
+                  <p className="text-emerald-700/80 mt-0.5">Lat : {(latitude ?? -4.3217).toFixed(5)} , Long : {(longitude ?? 15.3125).toFixed(5)}</p>
                 </div>
               </div>
             )}
+
+            {/* Manual Lat / Long Fields */}
+            <div className="pt-1 border-t border-slate-100">
+              <span className="block text-[11px] font-bold text-slate-500 mb-1.5">Coordonnées GPS (Latitude / Longitude) :</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Latitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={latitude ?? -4.3217}
+                    onChange={(e) => setLatitude(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-ecogreen-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Longitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={longitude ?? 15.3125}
+                    onChange={(e) => setLongitude(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-ecogreen-500"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Form Fields */}

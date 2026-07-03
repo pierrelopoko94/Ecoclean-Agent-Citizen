@@ -16,6 +16,7 @@ export type ReportStatus = 'SUBMITTED' | 'VALIDATED' | 'IN_PROGRESS' | 'COMPLETE
 
 export interface WasteReport {
   id: string;
+  userId?: string;
   photoUrl?: string;
   latitude: number;
   longitude: number;
