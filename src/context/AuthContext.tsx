@@ -123,8 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Wait a moment for Firebase auth to propagate, then sync with backend
       try {
-        await apiService.createProfile();
-      } catch (backendErr) {
+              } catch (backendErr) {
         console.error('Failed to create backend profile during registration:', backendErr);
       }
     } catch (err: any) {

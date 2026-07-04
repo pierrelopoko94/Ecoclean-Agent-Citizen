@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
-import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { 
   Camera, 
   MapPin, 
@@ -146,17 +145,6 @@ export const NewReport: React.FC = () => {
 
     let imageUrl = 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&w=600&q=80';
 
-    if (photoBase64) {
-      try {
-        const storage = getStorage();
-        const storageRef = ref(storage, `reports/${Date.now()}.jpg`);
-        await uploadString(storageRef, photoBase64, 'data_url');
-        imageUrl = await getDownloadURL(storageRef);
-        console.log("Image téléversée avec succès sur Firebase Storage :", imageUrl);
-      } catch (uploadErr) {
-        console.warn("Échec du téléversement vers Firebase Storage, utilisation de l'URL de repli :", uploadErr);
-      }
-    }
 
     console.log("BODY ENVOYÉ AU BACKEND:", JSON.stringify({
       wasteType,

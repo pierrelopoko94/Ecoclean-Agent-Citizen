@@ -100,27 +100,7 @@ async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retri
 export const apiService = {
   // Get current logged-in user profiles
   async getCurrentUser(): Promise<UserProfile> {
-    try {
-      return await apiRequest<UserProfile>('/users/me');
-    } catch (err: any) {
-      // If user doesn't exist on backend yet, create profile or handle
-      if (err instanceof APIError && err.status === 404) {
-        // Fallback or attempt to auto-create user on backend
-        return await this.createProfile();
-      }
-      throw err;
-    }
-  },
-
-  // Create or sync user profile on the backend
-  async createProfile(): Promise<UserProfile> {
-    return await apiRequest<UserProfile>('/users/me', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    });
+    return await apiRequest<UserProfile>('/users/me');
   },
 
   // Submit request to become an Agent de terrain
