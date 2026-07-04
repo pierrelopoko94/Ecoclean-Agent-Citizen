@@ -2,14 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
-  projectId: "inspiring-rex-ls7sz",
-  appId: "1:36628423235:web:55d428a9f96d7464de6af6",
-  apiKey: "AIzaSyD_0hyZ8t4vtNWVM4-Scv14ZZoUg3BZc-0",
-  authDomain: "inspiring-rex-ls7sz.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-35c964f2-e198-46eb-8850-3a218edec2cf",
-  storageBucket: "inspiring-rex-ls7sz.firebasestorage.app",
-  messagingSenderId: "36628423235"
+  apiKey: "AIzaSyBo5DcEwP8NWdh-lT2geo4SsV_ygIVsNrk",
+  authDomain: "naturecollection-de6e29fe.firebaseapp.com",
+  projectId: "naturecollection-de6e29fe",
+  storageBucket: "naturecollection-de6e29fe.firebasestorage.app",
+  messagingSenderId: "112438083090",
+  appId: "1:112438083090:web:52cbea5b7e7b67accfe2cb"
 };
+
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

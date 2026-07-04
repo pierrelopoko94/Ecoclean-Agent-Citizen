@@ -143,7 +143,12 @@ export const NewReport: React.FC = () => {
 
     setSubmitting(true);
 
+<<<<<<< HEAD
     const imageUrl = "https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&w=600&q=80";
+=======
+    let imageUrl = 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&w=600&q=80';
+
+>>>>>>> a9a420f (migration data)
 
     console.log("BODY ENVOYÉ AU BACKEND:", JSON.stringify({
       wasteType,

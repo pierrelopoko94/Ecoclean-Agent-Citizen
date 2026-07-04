@@ -141,8 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log("USER:", auth.currentUser);
       
       try {
-        await apiService.createProfile();
-      } catch (backendErr) {
+              } catch (backendErr) {
         console.error('Failed to create backend profile during registration:', backendErr);
       }
     } catch (err: any) {

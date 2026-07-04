@@ -102,6 +102,7 @@ async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retri
 export const apiService = {
   // Get current logged-in user profile with automatic 404/401 backend user sync
   async getCurrentUser(): Promise<UserProfile> {
+<<<<<<< HEAD
     try {
       console.log("[API] Executing GET /users/me ...");
       return await apiRequest<UserProfile>('/users/me');
@@ -139,6 +140,9 @@ export const apiService = {
       },
       body: JSON.stringify(payload),
     });
+=======
+    return await apiRequest<UserProfile>('/users/me');
+>>>>>>> a9a420f (migration data)
   },
 
   // Submit request to become an Agent de terrain
