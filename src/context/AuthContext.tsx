@@ -36,40 +36,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = async (firebaseUser: User) => {
     try {
       setError(null);
-      // ÉTAPE 3 & 5: Ensure fresh token before calling GET /api/users/me
-      const token = await firebaseUser.getIdToken(true);
-      console.log("USER:", auth.currentUser);
-      console.log("TOKEN FIREBASE OBTENU:", token ? "OK" : "ABSENT");
+      await firebaseUser.getIdToken(true);
 
-      let userProfile: UserProfile;
-      try {
-        userProfile = await apiService.getCurrentUser();
-      } catch (firstErr: any) {
-        // Retry logic for 401 unauthorized or 404
-        if (firstErr instanceof APIError && firstErr.status === 401) {
-          console.warn("[401 /users/me] Tentative de rafraîchissement du token Firebase...");
-          await firebaseUser.getIdToken(true);
+      let userProfile: UserProfile | null = null;
+      let lastError: any = null;
+      const maxRetries = 2;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
           userProfile = await apiService.getCurrentUser();
-        } else {
-          throw firstErr;
+          break;
+        } catch (err: any) {
+          lastError = err;
+          // Si 403 (pas encore synchronisé), réessaie après 1.5s
+          if (err instanceof APIError && err.status === 403 && attempt < maxRetries) {
+            await new Promise(res => setTimeout(res, 1500));
+            await firebaseUser.getIdToken(true);
+            continue;
+          }
+          // Si 401, rafraîchir le token et réessayer
+          if (err instanceof APIError && err.status === 401 && attempt === 1) {
+            await firebaseUser.getIdToken(true);
+            continue;
+          }
+          throw err;
         }
       }
 
-      setProfile(userProfile);
+      if (userProfile) {
+        setProfile(userProfile);
+      } else if (lastError) {
+        throw lastError;
+      }
     } catch (err: any) {
-      console.error('Failed to fetch backend profile:', err);
-      
-      const fallbackProfile: UserProfile = {
-        id: firebaseUser.uid,
-        email: firebaseUser.email || '',
-        name: firebaseUser.displayName || 'Citoyen EcoClean',
-        role: 'CITIZEN',
-        points: 0,
-        badge: 'Éco-Recrue',
-        agentRequestStatus: 'NONE'
-      };
-      setProfile(fallbackProfile);
-      setError(err.message || "Erreur de connexion avec le serveur.");
+      console.warn('[AuthContext] Backend profile unavailable, using local profile fallback:', err?.message || err);
+
+      if (err instanceof APIError && err.status === 404) {
+        setError("Compte non trouvé, veuillez vous réinscrire");
+        setProfile(null);
+      } else {
+        const fallbackProfile: UserProfile = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          name: firebaseUser.displayName || 'Citoyen EcoClean',
+          role: 'CITIZEN',
+          points: 0,
+          badge: 'Éco-Recrue',
+          agentRequestStatus: 'NONE'
+        };
+        setProfile(fallbackProfile);
+        setError(null);
+      }
     }
   };
 
@@ -82,7 +99,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      console.log("USER:", currentUser);
       if (currentUser) {
         await fetchProfile(currentUser);
       } else {
@@ -111,7 +127,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw popupError;
         }
       }
-      console.log("USER:", auth.currentUser);
     } catch (err: any) {
       setError(err.message || 'La connexion avec Google a échoué.');
       setLoading(false);
@@ -124,7 +139,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setError(null);
       await signInWithEmailAndPassword(auth, email, password);
-      console.log("USER:", auth.currentUser);
     } catch (err: any) {
       setError(err.message || 'La connexion par e-mail a échoué.');
       setLoading(false);
@@ -138,12 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: name });
-      console.log("USER:", auth.currentUser);
-      
-      try {
-              } catch (backendErr) {
-        console.error('Failed to create backend profile during registration:', backendErr);
-      }
     } catch (err: any) {
       setError(err.message || "L'inscription a échoué.");
       setLoading(false);

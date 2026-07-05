@@ -10,7 +10,6 @@ const firebaseConfig = {
   appId: "1:112438083090:web:52cbea5b7e7b67accfe2cb"
 };
 
-
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -25,16 +24,13 @@ export async function getFirebaseToken(): Promise<string | null> {
   }
 
   const currentUser = auth.currentUser;
-  console.log("USER:", currentUser);
 
   if (!currentUser) {
-    console.warn("USER: null - aucun utilisateur Firebase connecté");
     return null;
   }
 
   try {
     const token = await currentUser.getIdToken(true);
-    console.log("TOKEN FIREBASE OBTENU:", token ? "OK" : "ABSENT");
     return token;
   } catch (error) {
     console.error('Error getting Firebase Token:', error);

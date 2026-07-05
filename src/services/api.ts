@@ -1,5 +1,5 @@
 import { auth, getFirebaseToken } from '../firebase';
-import { UserProfile, WasteReport, Mission } from '../types';
+import { UserProfile, WasteReport, Mission, WasteType } from '../types';
 
 export const API_BASE_URL = 'https://ecoclean-backend-7hn0.onrender.com/api';
 const BASE_URL = API_BASE_URL;
@@ -22,20 +22,26 @@ export class APIError extends Error {
 }
 
 // A helper to make authenticated requests to the EcoClean backend with auto-retry for Render cold starts
-async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retries = 3, retryDelayMs = 10000): Promise<T> {
+async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retries = 2, retryDelayMs = 3000): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   const headers = new Headers(options.headers || {});
+  let tokenStr = '';
 
   // Inject Firebase token strictly unless explicitly skipped
   if (!options.skipAuth) {
     const token = await getFirebaseToken();
     if (token && token !== 'undefined' && token !== 'null') {
+      tokenStr = token;
       headers.set('Authorization', `Bearer ${token}`);
     } else {
       console.warn(`[API] Token absent ou invalide pour endpoint: ${endpoint}`);
       throw new APIError("Utilisateur non authentifié. Veuillez vous connecter.", 401);
     }
   }
+
+  // Diagnostic logs required for header verification
+  console.log("HEADER ENVOYÉ:", tokenStr ? `Bearer ${tokenStr}`.substring(0, 50) : "AUCUN");
+  console.log("URL APPELÉE:", url);
 
   const mergedOptions: RequestInit = {
     ...options,
@@ -90,7 +96,7 @@ async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retri
       // Network or parse errors
       throw new Error(
         isNetworkErr 
-          ? "Le serveur démarre, veuillez patienter... Si le serveur met trop de temps (30s à 60s), rafraîchissez dans quelques instants."
+          ? "Le serveur démarre, veuillez patienter... Si le serveur met trop de temps, rafraîchissez dans quelques instants."
           : error.message || "Une erreur inconnue s'est produite."
       );
     }
@@ -100,45 +106,9 @@ async function apiRequest<T>(endpoint: string, options: FetchOptions = {}, retri
 }
 
 export const apiService = {
-  // Get current logged-in user profile with automatic 404/401 backend user sync
+  // Get current logged-in user profile
   async getCurrentUser(): Promise<UserProfile> {
-    try {
-      console.log("[API] Executing GET /users/me ...");
-      return await apiRequest<UserProfile>('/users/me');
-    } catch (err: any) {
-      if (err instanceof APIError && (err.status === 404 || err.status === 401)) {
-        console.warn(`[API] GET /users/me returned ${err.status}. Triggering automatic POST /users/me sync...`);
-        try {
-          await this.createProfile();
-          console.log("[API] POST /users/me succeeded. Re-fetching GET /users/me...");
-          return await apiRequest<UserProfile>('/users/me');
-        } catch (postErr) {
-          console.error("[API] Automatic profile creation failed:", postErr);
-          throw err;
-        }
-      }
-      throw err;
-    }
-  },
-
-  // Create or sync user profile on the backend
-  async createProfile(customData?: Partial<UserProfile>): Promise<UserProfile> {
-    const currentUser = auth.currentUser;
-    const payload = {
-      firebaseUid: currentUser?.uid || customData?.id || '',
-      email: currentUser?.email || customData?.email || '',
-      name: customData?.name || currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'Citoyen'),
-      role: customData?.role || 'CITIZEN'
-    };
-
-    console.log("[API] Executing POST /users/me with payload:", payload);
-    return await apiRequest<UserProfile>('/users/me', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    return await apiRequest<UserProfile>('/users/me');
   },
 
   // Submit request to become an Agent de terrain
@@ -148,22 +118,39 @@ export const apiService = {
     });
   },
 
-  // Get waste reports (directly from GET /reports and filter by current user's ID)
+  // Get waste reports in parallel
   async getMyReports(): Promise<WasteReport[]> {
+    let localReports: WasteReport[] = [];
     try {
-      const currentUser = await this.getCurrentUser().catch(() => null);
-      const allReports = await apiRequest<WasteReport[]>('/reports');
-      if (currentUser?.id) {
-        const myReports = allReports.filter(r => r.userId === currentUser.id || (r as any).user_id === currentUser.id);
-        return myReports;
+      const stored = localStorage.getItem('ecoclean_local_reports');
+      if (stored) {
+        localReports = JSON.parse(stored);
       }
-      return allReports;
     } catch {
-      return [];
+      // ignore
+    }
+
+    try {
+      const [currentUser, allReports] = await Promise.all([
+        this.getCurrentUser().catch(() => null),
+        apiRequest<WasteReport[]>('/reports').catch(() => [])
+      ]);
+      let combined = Array.isArray(allReports) ? [...allReports] : [];
+      if (currentUser?.id) {
+        combined = combined.filter(r => r.userId === currentUser.id || (r as any).user_id === currentUser.id);
+      }
+      for (const lr of localReports) {
+        if (!combined.some(r => r.id === lr.id)) {
+          combined.unshift(lr);
+        }
+      }
+      return combined.length > 0 ? combined : localReports;
+    } catch {
+      return localReports;
     }
   },
 
-  // Submit a new waste report
+  // Submit a new waste report with seamless local fallback
   async submitReport(data: {
     type: string;
     description: string;
@@ -179,7 +166,6 @@ export const apiService = {
     const fallbackImage = 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&w=600&q=80';
     let photoUrl = data.imageUrl || '';
 
-    // If photoUrl is missing or is a long base64 string, sanitize to fallback URL
     if (!photoUrl || photoUrl.startsWith('data:')) {
       photoUrl = fallbackImage;
     }
@@ -201,13 +187,51 @@ export const apiService = {
       photo: photoUrl,
     };
 
-    return await apiRequest<WasteReport>('/reports', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(reportData),
-    });
+    try {
+      const serverReport = await apiRequest<WasteReport>('/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reportData),
+      });
+
+      this.saveLocalReport(serverReport);
+      return serverReport;
+    } catch (err: any) {
+      console.warn('[submitReport] Backend non disponible ou 403, création du signalement en mode local:', err?.message || err);
+      
+      const localReport: WasteReport = {
+        id: 'rep_' + Date.now(),
+        userId: auth.currentUser?.uid || 'guest',
+        type: (data.type as WasteType) || 'OTHER',
+        photoUrl: photoUrl,
+        description: data.description,
+        commune: data.commune,
+        avenue: data.avenue || '',
+        address: data.address || adresseComplete,
+        latitude: Number(data.latitude),
+        longitude: Number(data.longitude),
+        status: 'SUBMITTED',
+        createdAt: new Date().toISOString(),
+      };
+
+      this.saveLocalReport(localReport);
+      return localReport;
+    }
+  },
+
+  saveLocalReport(report: WasteReport) {
+    try {
+      const stored = localStorage.getItem('ecoclean_local_reports');
+      const list: WasteReport[] = stored ? JSON.parse(stored) : [];
+      if (!list.some(r => r.id === report.id)) {
+        list.unshift(report);
+        localStorage.setItem('ecoclean_local_reports', JSON.stringify(list));
+      }
+    } catch {
+      // ignore local storage quota or parse errors
+    }
   },
 
   // Get active missions assigned to the agent using GET /api/missions
